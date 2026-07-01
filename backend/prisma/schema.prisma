@@ -1,0 +1,128 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Tenant {
+  id              String           @id @default(uuid())
+  name            String
+  domain          String
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  users           User[]
+  categories      Category[]
+  documents       Document[]
+  complianceItems ComplianceItem[]
+  renewalRecords  RenewalRecord[]
+  events          DocumentEvent[]
+
+  @@map("docsafe_tenants")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  email     String   @unique
+  role      String   // Super Admin, Org Admin, Compliance Manager, Uploader, Reviewer, Viewer
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("docsafe_users")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  tenantId    String     @map("tenant_id")
+  name        String
+  description String?
+  isActive    Boolean    @default(true) @map("is_active")
+  createdBy   String     @map("created_by")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  documents   Document[]
+
+  @@unique([tenantId, name])
+  @@map("docsafe_categories")
+}
+
+model Document {
+  id              String           @id @default(uuid())
+  tenantId        String           @map("tenant_id")
+  categoryId      String           @map("category_id")
+  title           String
+  description     String?
+  fileAssetId     String?          @map("file_asset_id")
+  fileName        String?          @map("file_name")
+  fileSize        String?          @map("file_size")
+  ownerUserId     String           @map("owner_user_id")
+  issueDate       DateTime         @map("issue_date")
+  expiryDate      DateTime         @map("expiry_date")
+  renewalDueDate  DateTime?        @map("renewal_due_date")
+  status          String           // ACTIVE, EXPIRING_SOON, EXPIRED, RENEWAL_IN_PROGRESS, ARCHIVED, MISSING
+  visibilityScope String?          @map("visibility_scope")
+  uploadedBy      String           @map("uploaded_by")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  complianceItems ComplianceItem[]
+  renewalRecords  RenewalRecord[]
+  events          DocumentEvent[]
+
+  @@map("docsafe_documents")
+}
+
+model ComplianceItem {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  name             String
+  categoryId       String?   @map("category_id")
+  linkedDocumentId String?   @map("linked_document_id")
+  dueDate          DateTime? @map("due_date")
+  severity         String    // LOW, MEDIUM, HIGH
+  status           String    // COMPLIANT, PENDING, MISSING, EXPIRED, UNDER_REVIEW
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  linkedDocument   Document? @relation(fields: [linkedDocumentId], references: [id], onDelete: SetNull)
+
+  @@map("docsafe_compliance_items")
+}
+
+model RenewalRecord {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  documentId  String    @map("document_id")
+  initiatedBy String    @map("initiated_by")
+  initiatedAt DateTime  @default(now()) @map("initiated_at")
+  stage       String
+  remarks     String?
+  completedAt DateTime? @map("completed_at")
+  status      String    // NOT_STARTED, INITIATED, IN_PROGRESS, COMPLETED, REJECTED
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("docsafe_renewal_records")
+}
+
+model DocumentEvent {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  documentId   String?   @map("document_id")
+  eventType    String    @map("event_type")
+  payloadJson  String?   @map("payload_json")
+  triggeredBy  String    @map("triggered_by")
+  triggeredAt  DateTime  @default(now()) @map("triggered_at")
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document     Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@map("docsafe_document_events")
+}
